@@ -2,6 +2,14 @@
 
 Default template to use when creating repository
 
+## Purpose
+
+This repository stores one-shot and job-like scripts that perform Salesforce data updates, launch API calls to resolve sync issues between Salesforce and other systems, and handle tasks like reassigning accounts. Scripts are intended to be run manually or from job schedulers and should be focused, idempotent, and well-documented.
+
+## Folder structure
+
+- `scripts/` — Root folder for one-shot and scheduled job scripts; use clear names and include a README for each job where needed.
+
 ## Development Setup
 
 ### Install mise
