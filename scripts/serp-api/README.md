@@ -11,7 +11,7 @@ This tool enriches Salesforce Accounts with Google Maps data (via SerpApi) and u
 -   **Sanity Check**: Ensures high-quality matching.
     -   Compares Salesforce `Name` OR `Nom_du_restaurant__c` with Google Maps Title.
     -   **Rule**: Enrichment proceeds if **EITHER field** has **>= 80% similarity**. If both are lower, the account is skipped.
--   **Logging**: Every processed account is logged to a timestamped CSV in `data/`.
+-   **Logging**: Every processed account is logged to a timestamped CSV in `data/` (at repo root).
 -   **Performance**: Multi-threaded processing (20 workers) with batched seek pagination.
 -   **Dynamic Query**: Only fetches accounts where `Google_Place_ID__c` is null, so re-running is safe.
 
@@ -30,17 +30,19 @@ This tool enriches Salesforce Accounts with Google Maps data (via SerpApi) and u
 ## Directory Structure
 
 ```text
-SerpAPI/
-├── src/                      # Source code
-│   ├── main.py               # Entry point & orchestration
-│   ├── config.py             # Config & Auth
-│   ├── salesforce_client.py  # Salesforce API client
-│   ├── serp_client.py        # SerpApi client
-│   └── enrichment_service.py # Core enrichment logic + CSV logging
-├── data/                     # Output CSVs (gitignored)
-├── .env                      # Credentials (gitignored)
-├── .env.example              # Credentials template
-└── requirements.txt
+salesforce-data-utils/
+├── .env                          # Credentials (gitignored, at repo root)
+├── .env.example                  # Credentials template
+├── .gitignore                    # Single gitignore for the whole repo
+├── requirements.txt              # Python dependencies
+├── data/                         # Output CSVs (gitignored)
+└── scripts/
+    └── serp-api/
+        ├── main.py               # Entry point & orchestration
+        ├── config.py             # Config & Auth
+        ├── salesforce_client.py  # Salesforce API client
+        ├── serp_client.py        # SerpApi client
+        └── enrichment_service.py # Core enrichment logic + CSV logging
 ```
 
 ## Salesforce Fields Updated
@@ -56,7 +58,7 @@ SerpAPI/
 | `Google_Updated_Date__c` | Date | Date the Google data was fetched |
 | `Google_Thumbnail_URL__c` | URL(255) | Thumbnail image URL |
 | `Google_URL__c` | URL(255) | Restaurant website URL |
-| `Has_Google_Accept_Bookings_Extension__c` | Checkbox | Google bookings available |
+| `HasGoogleAcceptBookingsExtension__c` | Checkbox | Google bookings available |
 | `HasGoogleDeliveryExtension__c` | Checkbox | Delivery available (from service options) |
 | `HasGoogleTakeoutExtension__c` | Checkbox | Takeout available (from service options) |
 | `Prospection_Status__c` | Picklist | Status ("Permanently Closed", "Temporarily Closed") |
@@ -69,7 +71,7 @@ SerpAPI/
 
 ## Installation
 
-1.  Install dependencies:
+1.  Install dependencies (from repo root):
     ```bash
     pip install -r requirements.txt
     ```
@@ -80,7 +82,7 @@ SerpAPI/
     cp .env.example .env
     ```
 
-    Then open `.env` and fill in your credentials:
+    Then open `.env` at the repo root and fill in your credentials:
 
     ```env
     # Salesforce
@@ -94,22 +96,24 @@ SerpAPI/
 
 ## Usage
 
+All commands are run from the repo root.
+
 ### 1. Dry Run (Recommended first)
 Simulate the process. Searches Google Maps and logs to CSV but does **not** update Salesforce.
 ```bash
-python src/main.py --dry-run --limit 10
+python scripts/serp-api/main.py --dry-run --limit 10
 ```
 
 ### 2. Test with Limit
 Process only a few accounts to verify everything works.
 ```bash
-python src/main.py --limit 10
+python scripts/serp-api/main.py --limit 10
 ```
 
 ### 3. Full Run
 Process all unenriched accounts. Uses seek pagination to handle 50,000+ accounts in batches of 1000.
 ```bash
-python src/main.py
+python scripts/serp-api/main.py
 ```
 
 ## Output
@@ -153,8 +157,8 @@ Each run creates a timestamped CSV in `data/` (e.g., `data/enrichment_20260206_1
 
 ## Files
 
-- `src/main.py` - Entry point and orchestration
-- `src/enrichment_service.py` - Core enrichment logic, validation, and CSV logging
-- `src/salesforce_client.py` - Salesforce API wrapper (query, update, merge)
-- `src/serp_client.py` - SerpApi client with result mapping
-- `src/config.py` - Configuration and authentication
+- `main.py` - Entry point and orchestration
+- `enrichment_service.py` - Core enrichment logic, validation, and CSV logging
+- `salesforce_client.py` - Salesforce API wrapper (query, update, merge)
+- `serp_client.py` - SerpApi client with result mapping
+- `config.py` - Configuration and authentication

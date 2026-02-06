@@ -1,9 +1,11 @@
 import os
+from pathlib import Path
 from simple_salesforce import Salesforce
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load .env from repo root (two levels up from scripts/serp-api/)
+_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_root / '.env')
 
 # Salesforce Credentials
 SF_USERNAME = os.getenv("SF_USERNAME")

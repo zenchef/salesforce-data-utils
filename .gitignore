@@ -77,6 +77,9 @@ local.settings.json
 # OS generated files
 .DS_Store
 
+# Data output (CSVs from enrichment runs)
+data/*.csv
+
 # Misc
 *.bak
 *.tmp
