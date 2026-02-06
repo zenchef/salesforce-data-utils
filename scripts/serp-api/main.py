@@ -39,7 +39,7 @@ def main():
         sf = get_salesforce_client()
         sf_client = SalesforceClient(sf)
         serp_client = SerpApiClient()
-        service = EnrichmentService(sf_client, serp_client, csv_path)
+        service = EnrichmentService(sf_client, serp_client, csv_path, data_dir)
         logger.info("Services initialized successfully.")
     except Exception as e:
         logger.error(f"Initialization Failed: {e}")

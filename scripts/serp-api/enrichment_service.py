@@ -1,9 +1,10 @@
 import re
 import csv
+import os
 import logging
 import threading
 import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 
 from fuzzywuzzy import fuzz
 
@@ -18,12 +19,41 @@ logger = logging.getLogger(__name__)
 
 
 class EnrichmentService:
-    def __init__(self, sf_client: SalesforceClient, serp_client: SerpApiClient, csv_path: str):
+    PROCESSED_CSV = 'processed_accounts.csv'
+    PROCESSED_HEADERS = ['account_id', 'status', 'timestamp']
+
+    def __init__(self, sf_client: SalesforceClient, serp_client: SerpApiClient, csv_path: str, data_dir: str):
         self.sf_client = sf_client
         self.serp_client = serp_client
         self.csv_path = csv_path
+        self.data_dir = data_dir
         self._csv_lock = threading.Lock()
+        self._processed_lock = threading.Lock()
+        self._processed_path = os.path.join(data_dir, self.PROCESSED_CSV)
+        self.excluded_ids = self._load_processed_ids()
         self._init_csv()
+
+    def _load_processed_ids(self) -> Set[str]:
+        """Load already-processed account IDs from the persistent CSV."""
+        ids = set()
+        if not os.path.exists(self._processed_path):
+            return ids
+        with open(self._processed_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ids.add(row['account_id'])
+        logger.info(f"Loaded {len(ids)} already-processed account IDs to exclude.")
+        return ids
+
+    def _mark_processed(self, account_id: str, status: str):
+        """Append an account to the persistent processed CSV (thread-safe)."""
+        with self._processed_lock:
+            file_exists = os.path.exists(self._processed_path)
+            with open(self._processed_path, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                if not file_exists:
+                    writer.writerow(self.PROCESSED_HEADERS)
+                writer.writerow([account_id, status, datetime.datetime.now().isoformat()])
 
     def _init_csv(self):
         """Initialize CSV file with headers."""
@@ -55,11 +85,18 @@ class EnrichmentService:
         """
         aid = account['Id']
         account_name = account.get('Name', '')
+
+        # Skip if already processed in a previous run
+        if aid in self.excluded_ids:
+            logger.debug(f"Skipping already-processed account {aid}")
+            return
+
         try:
             # 1. Build search query
             search_query = self._construct_search_query(account)
             if not search_query:
                 self._log_csv(aid, account_name, 'SKIPPED', 'Insufficient data', None, 0, '')
+                self._mark_processed(aid, 'SKIPPED')
                 return
 
             logger.info(f"Searching for: {search_query}")
@@ -68,6 +105,7 @@ class EnrichmentService:
             if not result_data:
                 logger.info(f"No results found for Account {aid}")
                 self._log_csv(aid, account_name, 'NO_RESULT', 'No SERP results found', None, 0, '')
+                self._mark_processed(aid, 'NO_RESULT')
                 return
 
             # 2. Sanity Check - fuzzy match >= 80%
@@ -88,6 +126,7 @@ class EnrichmentService:
                 )
                 self._log_csv(aid, account_name, 'SKIPPED_SANITY_CHECK',
                               f"Best match: {match_score}% < 80%", result_data, match_score, matched_field)
+                self._mark_processed(aid, 'SKIPPED_SANITY_CHECK')
                 return
 
             logger.info(f"Sanity Check Passed for {aid}. Matched on {matched_field}: {match_score}%")
@@ -113,6 +152,7 @@ class EnrichmentService:
         except Exception as e:
             logger.error(f"Error processing account {aid}: {e}")
             self._log_csv(aid, account_name, 'ERROR', str(e), None, 0, '')
+            self._mark_processed(aid, 'ERROR')
 
     def _construct_search_query(self, account: Dict[str, Any]) -> str:
         parts = [
