@@ -152,7 +152,6 @@ class EnrichmentService:
         except Exception as e:
             logger.error(f"Error processing account {aid}: {e}")
             self._log_csv(aid, account_name, 'ERROR', str(e), None, 0, '')
-            self._mark_processed(aid, 'ERROR')
 
     def _construct_search_query(self, account: Dict[str, Any]) -> str:
         parts = [
