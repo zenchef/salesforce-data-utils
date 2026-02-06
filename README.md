@@ -1,14 +1,18 @@
-# default-template
+# salesforce-data-utils
 
-Default template to use when creating repository
+Utilities and scripts for Salesforce data operations — enrichment, syncing, cleanup, and bulk updates.
 
-## Purpose
+## Folder Structure
 
-This repository stores one-shot and job-like scripts that perform Salesforce data updates, launch API calls to resolve sync issues between Salesforce and other systems, and handle tasks like reassigning accounts. Scripts are intended to be run manually or from job schedulers and should be focused, idempotent, and well-documented.
-
-## Folder structure
-
-- `scripts/` — Root folder for one-shot and scheduled job scripts; use clear names and include a README for each job where needed.
+```text
+salesforce-data-utils/
+├── .env                  # Credentials (gitignored)
+├── .env.example          # Credentials template
+├── requirements.txt      # Python dependencies
+├── data/                 # Output data (CSVs, gitignored)
+└── scripts/              # All scripts and tools
+    └── serp-api/         # Google Maps enrichment for SF Accounts
+```
 
 ## Development Setup
 
