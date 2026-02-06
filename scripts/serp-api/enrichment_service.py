@@ -183,6 +183,11 @@ class EnrichmentService:
         if result.get("Prospection_Status__c"):
             payload["Prospection_Status__c"] = result["Prospection_Status__c"]
 
+        # Truncate URL fields to 255 chars (Salesforce field limit)
+        for url_field in ('Google_Thumbnail_URL__c', 'Google_URL__c'):
+            if payload.get(url_field) and len(payload[url_field]) > 255:
+                payload[url_field] = payload[url_field][:255]
+
         # Remove None values to avoid overwriting existing SF data with blanks
         return {k: v for k, v in payload.items() if v is not None}
 

@@ -31,9 +31,15 @@ class SerpApiClient:
             search = GoogleSearch(params)
             results = search.get_dict()
             
-            # Check for error in response — raise so caller can distinguish from "no results"
+            # Check for error in response
             if "error" in results:
-                raise RuntimeError(f"SERP API Error: {results['error']}")
+                error_msg = results['error']
+                # "No results" is a legitimate response, not an API failure — return None
+                if "hasn't returned any results" in error_msg:
+                    logger.info(f"No results from Google for query: {query}")
+                    return None
+                # Throttle / real API errors — raise so they're retried next run
+                raise RuntimeError(f"SERP API Error: {error_msg}")
             
             # We usually look at 'local_results' or 'place_results' depending on query specificity
             # For a general search, we might get a list 'local_results'
