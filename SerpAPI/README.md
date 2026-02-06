@@ -1,201 +1,160 @@
 
-# Salesforce Enrichment Tool (SerpApi + Supabase)
+# Salesforce Enrichment Tool (SerpApi)
 
-This tool enriches Salesforce Accounts with Google My Business data (via SerpApi) and logs results to both a local CSV and a Supabase database.
+This tool enriches Salesforce Accounts with Google Maps data (via SerpApi) and updates them directly in Salesforce. Every run is logged to a timestamped CSV for audit.
 
 ## Features
 
--   **Enrichment**: Fetches Google My Business data for Salesforce Accounts missing `Google_Place_ID__c`.
-    -   Fetches: Rating, Reviews, Price, Type, Website, Photos, Booking options.
+-   **Enrichment**: Fetches Google Maps data for Salesforce Accounts missing `Google_Place_ID__c`.
+    -   Fetches: Rating, Reviews, Price, Type, Website, Thumbnail, Booking options.
     -   **Filters**: Excludes accounts marked as "Hotel" OR `RecordType` = "Parent".
 -   **Sanity Check**: Ensures high-quality matching.
     -   Compares Salesforce `Name` OR `Nom_du_restaurant__c` with Google Maps Title.
-    -   **Rule**: Enrichment proceeds if **EITHER field** has **≥ 80% similarity**. If both are lower, the account is skipped.
--   **Logging**:
-    -   Database: **Supabase** (`enrichment_results` table) with duplicate prevention.
-    -   *Note: Local CSV logging has been removed.*
--   **Performance**: Multi-threaded processing for volume.
--   **Duplicate Prevention**: Unique constraint on `account_id` prevents duplicate enrichment logs.
+    -   **Rule**: Enrichment proceeds if **EITHER field** has **>= 80% similarity**. If both are lower, the account is skipped.
+-   **Logging**: Every processed account is logged to a timestamped CSV in `data/`.
+-   **Performance**: Multi-threaded processing (20 workers) with batched seek pagination.
+-   **Dynamic Query**: Only fetches accounts where `Google_Place_ID__c` is null, so re-running is safe.
 
 ## Logic Overview
 
 1.  **Fetch**: Gets accounts from Salesforce where `Google_Place_ID__c` is null. Excludes `RecordType = 'Parent'` and `Hotel_Restaurant__c = true`.
 2.  **Search**: Queries Google Maps with `Name + Address + City + Country + "Restaurant"`.
-3.  **Validate**: Fuzzy match check comparing Google Title with BOTH `Name` AND `Nom_du_restaurant__c`. Enrichment proceeds if EITHER field scores ≥80%.
-4.  **Clean Data**: 
-        - **Price**: Normalizes to Salesforce picklist format ($, $$, $$$, $$$$). 
-            - **Logic**: Handles specific values (`€20`) and ranges (`€20–30`). For ranges, the **average** value is calculated to determine the price level.
-        - **Type**: Converts arrays to comma-separated strings (e.g., `['Restaurant', 'Cafe']` → `"Restaurant, Cafe"`).
+3.  **Validate**: Fuzzy match check comparing Google Title with BOTH `Name` AND `Nom_du_restaurant__c`. Enrichment proceeds if EITHER field scores >= 80%.
+4.  **Clean Data**:
+    - **Price**: Normalizes to Salesforce picklist format ($, $$, $$$, $$$$).
+        - **Logic**: Handles specific values (`€20`) and ranges (`€20-30`). For ranges, the **average** value is calculated to determine the price level.
+    - **Type**: Converts arrays to comma-separated strings (e.g., `['Restaurant', 'Cafe']` -> `"Restaurant, Cafe"`).
+5.  **Update**: Writes enriched data directly to Salesforce Account fields (unless `--dry-run`).
+6.  **Log**: Writes a row to the CSV with status, match score, and all Google data.
 
-    ## Directory Structure
-    ```text
-    /serpAPI/
-    ├── src/                    # Source code
-    │   ├── main.py             # Entry point
-    │   ├── config.py           # Config & Auth
-    │   ├── supabase_client.py  # DB Connector (with duplicate checking)
-    │   ├── salesforce_client.py # Salesforce API client
-    │   ├── serp_client.py      # SerpApi client
-    │   └── enrichment_service.py # Core enrichment logic
-    ├── data/                   # Output CSVs
-    ├── logs/                   # Application logs
-    ├── check_database.py       # Utility to check Supabase stats
-    ├── supabase_schema.sql     # Database schema
-    ├── .env                    # Credentials
-    └── requirements.txt
-    ```
+## Directory Structure
 
-    ## Salesforce Fields Updated
+```text
+SerpAPI/
+├── src/                      # Source code
+│   ├── main.py               # Entry point & orchestration
+│   ├── config.py             # Config & Auth
+│   ├── salesforce_client.py  # Salesforce API client
+│   ├── serp_client.py        # SerpApi client
+│   └── enrichment_service.py # Core enrichment logic + CSV logging
+├── data/                     # Output CSVs (gitignored)
+├── .env                      # Credentials (gitignored)
+├── .env.example              # Credentials template
+└── requirements.txt
+```
 
-    | Field Name | Type | Description |
-    |-----------|------|-------------|
-    | `Google_Place_ID__c` | Text(255) | Google Maps Place ID (External ID) |
-    | `Google_Data_ID__c` | Text(255) | Google Data ID (External ID) |
-    | `Google_Type__c` | Text(255) | Restaurant type (e.g., "French restaurant, Bistro") |
-    | `Google_Rating__c` | Number(16,2) | Average rating from Google |
-    | `Google_Reviews__c` | Number(18,0) | Number of reviews |
-    | `Google_Price__c` | Picklist | Price level ($, $$, $$$, $$$$) |
-    | `Google_Updated_Date__c` | Date | Date the Google data was fetched |
-    | `Google_Thumbnail_URL__c` | URL(255) | Thumbnail image URL |
-    | `Google_URL__c` | URL(255) | Restaurant website URL |
-    | `Has_Google_Accept_Bookings_Extension__c` | Checkbox | Google bookings available |
-    | `HasGoogleDeliveryExtension__c` | Checkbox | Delivery available (from service options) |
-    | `HasGoogleTakeoutExtension__c` | Checkbox | Takeout available (from service options) |
-    | `Prospection_Status__c` | Picklist | Status ("Permanently Closed", "Temporarily Closed") |
-    | `BillingStreet` | Address | Updated for prospects if high match |
+## Salesforce Fields Updated
 
-    ## Prerequisites
+| Field Name | Type | Description |
+|-----------|------|-------------|
+| `Google_Place_ID__c` | Text(255) | Google Maps Place ID (External ID) |
+| `Google_Data_ID__c` | Text(255) | Google Data ID (External ID) |
+| `Google_Type__c` | Text(255) | Restaurant type (e.g., "French restaurant, Bistro") |
+| `Google_Rating__c` | Number(16,2) | Average rating from Google |
+| `Google_Reviews__c` | Number(18,0) | Number of reviews |
+| `Google_Price__c` | Picklist | Price level ($, $$, $$$, $$$$) |
+| `Google_Updated_Date__c` | Date | Date the Google data was fetched |
+| `Google_Thumbnail_URL__c` | URL(255) | Thumbnail image URL |
+| `Google_URL__c` | URL(255) | Restaurant website URL |
+| `Has_Google_Accept_Bookings_Extension__c` | Checkbox | Google bookings available |
+| `HasGoogleDeliveryExtension__c` | Checkbox | Delivery available (from service options) |
+| `HasGoogleTakeoutExtension__c` | Checkbox | Takeout available (from service options) |
+| `Prospection_Status__c` | Picklist | Status ("Permanently Closed", "Temporarily Closed") |
 
-    -   Python 3.8+
-    -   Salesforce Credentials
-    -   SerpApi Key
-    -   Supabase Project (URL + Key)
+## Prerequisites
 
-    ## Installation
+-   Python 3.8+
+-   Salesforce Credentials (Username, Password, Security Token)
+-   SerpApi Key ([serpapi.com](https://serpapi.com/))
 
-    1.  Install dependencies:
-        ```bash
-        pip3 install -r requirements.txt
-        ```
+## Installation
 
-    2.  **Configuration**: Set up your environment variables by copying the example file:
-        
-        ```bash
-        cp example.env .env
-        ```
-        
-        Then open `.env` and fill in your credentials:
-
-        ```env
-        # Salesforce
-        DOMAIN=login
-        CONSUMER_KEY=your_consumer_key
-        CONSUMER_SECRET=your_consumer_secret
-        USERNAME=your_username
-        PASSWORD=your_password
-        SECURITY_TOKEN=your_security_token
-
-        # SERP API
-        SERPAPI_KEY=your_serpapi_key
-
-        # Supabase
-        SUPABASE_URL=your_supabase_url
-        SUPABASE_KEY=your_supabase_key
-        ```
-
-    3.  **Supabase Setup**:
-        
-        If setting up for the first time:
-        ```bash
-        # Run the main schema
-        cat supabase_schema.sql
-        ```
-        
-        **CRITICAL UPDATE**: If you already have the table, you MUST run the migration to add new columns:
-        ```bash
-        # Open Supabase SQL Editor and run the contents of:
-        cat add_fields_migration.sql
-        ```
-
-    ## Usage
-
-    **Note**: Always run from the root directory.
-
-    ### 1. Check Database Stats
-    View enrichment statistics and check for duplicates:
+1.  Install dependencies:
     ```bash
-    python3 check_database.py
+    pip install -r requirements.txt
     ```
 
-    ### 2. Dry Run (Recommended)
-    Simulate the process. Logs to Supabase.
+2.  **Configuration**: Set up your environment variables by copying the example file:
+
     ```bash
-    python3 src/main.py --dry-run
+    cp .env.example .env
     ```
 
-    ### 3. Test with Limit
-    Process only a few accounts to verify.
-    ```bash
-    python3 src/main.py --dry-run --limit 10
+    Then open `.env` and fill in your credentials:
+
+    ```env
+    # Salesforce
+    SF_USERNAME=your_username
+    SF_PASSWORD=your_password
+    SF_TOKEN=your_security_token
+
+    # SERP API
+    SERPAPI_KEY=your_serpapi_key
     ```
 
-    ### 4. Production Run (Large Scale)
-    To process all 50,000+ accounts, simply run the script. It now uses "Seek Pagination" to iterate through all records efficiently and checks Supabase before calling the API to skip already enriched accounts.
-    ```bash
-    python3 src/main.py
-    ```
-    *Note: You can stop and restart the script at any time. It will fast-forward through already enriched accounts.*
+## Usage
 
-    ## Output
+### 1. Dry Run (Recommended first)
+Simulate the process. Searches Google Maps and logs to CSV but does **not** update Salesforce.
+```bash
+python src/main.py --dry-run --limit 10
+```
 
-    ### Supabase Table: `enrichment_results`
-    | Column | Type | Description |
-    |--------|------|-------------|
-    | `account_id` | TEXT | Salesforce ID (unique) |
-    | `status` | TEXT | `ENRICHED`, `SKIPPED_SANITY_CHECK`, `NO_RESULT`, `ERROR` |
-    | `message` | TEXT | Status details |
-    | `title` | TEXT | Google Maps Title |
-    | `address` | TEXT | Google Maps Address |
-    | `google_place_id` | TEXT | Matched Place ID |
-    | `google_type__c` | TEXT | Restaurant type(s) |
-    | `google_rating__c` | NUMERIC | Rating (0-5) |
-    | `google_reviews__c` | INTEGER | Review count |
-    | `google_price__c` | TEXT | Price level |
-    | `google_url__c` | TEXT | Website URL |
-    | `created_at` | TIMESTAMP | Auto-timestamp |
+### 2. Test with Limit
+Process only a few accounts to verify everything works.
+```bash
+python src/main.py --limit 10
+```
 
-    **Unique Constraint**: `account_id` - prevents duplicate logs.
+### 3. Full Run
+Process all unenriched accounts. Uses seek pagination to handle 50,000+ accounts in batches of 1000.
+```bash
+python src/main.py
+```
 
-    ## Status Codes
+## Output
 
-    - **ENRICHED**: Successfully enriched account with Google data
-    - **SKIPPED_SANITY_CHECK**: Fuzzy match score < 80% (data quality protection)
-    - **NO_RESULT**: No Google Maps results found for search query
-    - **ERROR**: Error occurred during processing
+Each run creates a timestamped CSV in `data/` (e.g., `data/enrichment_20260206_183000.csv`):
 
-    ## Quality Metrics
+| Column | Description |
+|--------|-------------|
+| `account_id` | Salesforce Account ID |
+| `account_name` | Account Name |
+| `status` | `ENRICHED`, `ENRICHED (DRY RUN)`, `SKIPPED_SANITY_CHECK`, `NO_RESULT`, `SKIPPED`, `ERROR` |
+| `message` | Status details |
+| `google_place_id` | Matched Place ID |
+| `google_title` | Google Maps Title |
+| `google_address` | Google Maps Address |
+| `google_type` | Restaurant type(s) |
+| `google_rating` | Rating (0-5) |
+| `google_reviews` | Review count |
+| `google_price` | Price level |
+| `google_url` | Website URL |
+| `match_score` | Fuzzy match percentage |
+| `matched_field` | Which SF field matched (Name or Nom_du_restaurant__c) |
+| `timestamp` | Processing timestamp |
 
-    From recent runs, the fuzzy matching protection successfully prevents ~65-80% of low-confidence matches, ensuring only high-quality data enriches Salesforce.
+## Status Codes
 
-    ## Troubleshooting
+- **ENRICHED**: Successfully enriched and updated in Salesforce
+- **ENRICHED (DRY RUN)**: Would have been enriched (dry-run mode)
+- **SKIPPED_SANITY_CHECK**: Fuzzy match score < 80% (data quality protection)
+- **NO_RESULT**: No Google Maps results found for search query
+- **SKIPPED**: Insufficient data to build a search query
+- **ERROR**: Error occurred during processing
 
-    **Issue**: Supabase errors about missing columns  
-    **Solution**: Run the updated `supabase_schema.sql` migration
+## Troubleshooting
 
-    **Issue**: Account_ID showing as `None` in logs  
-    **Solution**: This is expected behavior - the account_id is extracted from the CSV entry internally
+**Issue**: High percentage of SKIPPED_SANITY_CHECK
+**Solution**: This is normal - the 80% threshold protects data quality. Review skipped accounts manually in the CSV if needed.
 
-    **Issue**: High percentage of SKIPPED_SANITY_CHECK  
-    **Solution**: This is normal - the 80% threshold protects data quality. Review skipped accounts manually if needed.
+**Issue**: SerpApi errors or rate limits
+**Solution**: Use `--limit` to control volume. SerpApi charges per search, so start small.
 
-    ## Files
+## Files
 
-    - `src/main.py` - Entry point and orchestration
-    - `src/enrichment_service.py` - Core enrichment logic
-    - `src/salesforce_client.py` - Salesforce API wrapper
-    - `src/serp_client.py` - SerpApi wrapper with array-to-string conversion
-    - `src/supabase_client.py` - Supabase client with duplicate checking
-    - `src/config.py` - Configuration and authentication
-    - `check_database.py` - Database statistics utility
-    - `supabase_schema.sql` - Database schema (lowercase columns)
-    - `SUPABASE_MIGRATION.md` - Migration instructions
+- `src/main.py` - Entry point and orchestration
+- `src/enrichment_service.py` - Core enrichment logic, validation, and CSV logging
+- `src/salesforce_client.py` - Salesforce API wrapper (query, update, merge)
+- `src/serp_client.py` - SerpApi client with result mapping
+- `src/config.py` - Configuration and authentication

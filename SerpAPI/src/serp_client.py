@@ -77,7 +77,7 @@ class SerpApiClient:
             "Title": result.get("title"), 
             "Address": result.get("address"),
             "Prospection_Status__c": None, 
-            "Has_Google_Accept_Bookings_Extension__c": False,
+            "HasGoogleAcceptBookingsExtension__c": False,
             "HasGoogleDeliveryExtension__c": False,
             "HasGoogleTakeoutExtension__c": False,
             "Google_Thumbnail_URL__c": result.get("thumbnail"),
@@ -87,14 +87,14 @@ class SerpApiClient:
         # Check extensions/bookings
         # 1. Check 'reserve_a_table' link presence
         if result.get("reserve_a_table"):
-             mapped["Has_Google_Accept_Bookings_Extension__c"] = True
+             mapped["HasGoogleAcceptBookingsExtension__c"] = True
         
         # 2. Check 'extensions' list (older format or specific ad extensions)
         extensions = result.get("extensions", [])
         if extensions:
              for ext in extensions:
                  if "booking" in str(ext).lower() or "reserve" in str(ext).lower():
-                      mapped["Has_Google_Accept_Bookings_Extension__c"] = True
+                      mapped["HasGoogleAcceptBookingsExtension__c"] = True
 
         # 3. Check Service Options (Delivery / Takeout)
         service_options = result.get("service_options", {})
