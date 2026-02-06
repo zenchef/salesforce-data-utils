@@ -10,6 +10,10 @@ from fuzzywuzzy import fuzz
 from salesforce_client import SalesforceClient
 from serp_client import SerpApiClient
 
+# Custom SUCCESS log level (between INFO and WARNING)
+SUCCESS = 25
+logging.addLevelName(SUCCESS, "SUCCESS")
+
 logger = logging.getLogger(__name__)
 
 
@@ -95,7 +99,7 @@ class EnrichmentService:
                 logger.info(f"[DRY RUN] Would update Account {aid} with: {payload}")
             else:
                 if self.sf_client.update_account(aid, payload):
-                    logger.info(f"Updated Account {aid} in Salesforce")
+                    logger.log(SUCCESS, f"Updated Account {aid} in Salesforce")
                 else:
                     logger.error(f"Failed to update Account {aid}")
                     self._log_csv(aid, account_name, 'ERROR', 'Salesforce update failed',
