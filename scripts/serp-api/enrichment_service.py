@@ -4,6 +4,7 @@ import os
 import logging
 import threading
 import datetime
+from collections import Counter
 from typing import Dict, Any, Optional, Set
 
 from fuzzywuzzy import fuzz
@@ -31,7 +32,18 @@ class EnrichmentService:
         self._processed_lock = threading.Lock()
         self._processed_path = os.path.join(data_dir, self.PROCESSED_CSV)
         self.excluded_ids = self._load_processed_ids()
+        self._stats_lock = threading.Lock()
+        self._stats = Counter()
         self._init_csv()
+
+    def get_stats(self) -> Counter:
+        """Return a copy of the run stats."""
+        return Counter(self._stats)
+
+    def _count(self, status: str):
+        """Thread-safe stats increment."""
+        with self._stats_lock:
+            self._stats[status] += 1
 
     def _load_processed_ids(self) -> Set[str]:
         """Load already-processed account IDs from the persistent CSV."""
@@ -89,6 +101,7 @@ class EnrichmentService:
         # Skip if already processed in a previous run
         if aid in self.excluded_ids:
             logger.debug(f"Skipping already-processed account {aid}")
+            self._count('ALREADY_PROCESSED')
             return
 
         try:
@@ -97,6 +110,7 @@ class EnrichmentService:
             if not search_query:
                 self._log_csv(aid, account_name, 'SKIPPED', 'Insufficient data', None, 0, '')
                 self._mark_processed(aid, 'SKIPPED')
+                self._count('SKIPPED')
                 return
 
             logger.info(f"Searching for: {search_query}")
@@ -106,6 +120,7 @@ class EnrichmentService:
                 logger.info(f"No results found for Account {aid}")
                 self._log_csv(aid, account_name, 'NO_RESULT', 'No SERP results found', None, 0, '')
                 self._mark_processed(aid, 'NO_RESULT')
+                self._count('NO_RESULT')
                 return
 
             # 2. Sanity Check - fuzzy match >= 80%
@@ -127,6 +142,7 @@ class EnrichmentService:
                 self._log_csv(aid, account_name, 'SKIPPED_SANITY_CHECK',
                               f"Best match: {match_score}% < 80%", result_data, match_score, matched_field)
                 self._mark_processed(aid, 'SKIPPED_SANITY_CHECK')
+                self._count('SKIPPED_SANITY_CHECK')
                 return
 
             logger.info(f"Sanity Check Passed for {aid}. Matched on {matched_field}: {match_score}%")
@@ -148,10 +164,12 @@ class EnrichmentService:
             # 4. Log success to CSV
             status = 'ENRICHED (DRY RUN)' if dry_run else 'ENRICHED'
             self._log_csv(aid, account_name, status, 'OK', result_data, match_score, matched_field)
+            self._count(status)
 
         except Exception as e:
             logger.error(f"Error processing account {aid}: {e}")
             self._log_csv(aid, account_name, 'ERROR', str(e), None, 0, '')
+            self._count('ERROR')
 
     def _construct_search_query(self, account: Dict[str, Any]) -> str:
         parts = [

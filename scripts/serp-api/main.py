@@ -87,7 +87,17 @@ def main():
             logger.error(f"Critical Loop Error: {e}")
             break
 
-    logger.info(f"Enrichment Finished. Processed {total_processed} accounts.")
+    # Final summary
+    stats = service.get_stats()
+    logger.info("=" * 50)
+    logger.info(f"Enrichment Finished. Fetched {total_processed} accounts.")
+    logger.info(f"  Already processed (skipped):  {stats.get('ALREADY_PROCESSED', 0)}")
+    logger.info(f"  Enriched:                      {stats.get('ENRICHED', 0) + stats.get('ENRICHED (DRY RUN)', 0)}")
+    logger.info(f"  Sanity check failed:           {stats.get('SKIPPED_SANITY_CHECK', 0)}")
+    logger.info(f"  No Google results:             {stats.get('NO_RESULT', 0)}")
+    logger.info(f"  Insufficient data (skipped):   {stats.get('SKIPPED', 0)}")
+    logger.info(f"  Errors:                        {stats.get('ERROR', 0)}")
+    logger.info("=" * 50)
     logger.info(f"Results logged to: {csv_path}")
 
 if __name__ == "__main__":
