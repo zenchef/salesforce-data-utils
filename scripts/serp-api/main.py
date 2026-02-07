@@ -1,7 +1,6 @@
 import logging
 import sys
 import os
-import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import argparse
@@ -31,8 +30,7 @@ def main():
     data_dir = Path(__file__).resolve().parent.parent.parent / 'data'
     data_dir.mkdir(parents=True, exist_ok=True)
     data_dir = str(data_dir)
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    csv_path = os.path.join(data_dir, f'enrichment_{timestamp}.csv')
+    csv_path = os.path.join(data_dir, 'enrichment_results.csv')
 
     # Initialize services
     try:

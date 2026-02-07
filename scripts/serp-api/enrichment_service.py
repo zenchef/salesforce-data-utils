@@ -68,16 +68,17 @@ class EnrichmentService:
                 writer.writerow([account_id, status, datetime.datetime.now().isoformat()])
 
     def _init_csv(self):
-        """Initialize CSV file with headers."""
-        with open(self.csv_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                'account_id', 'account_name', 'status', 'message',
-                'google_place_id', 'google_title', 'google_address',
-                'google_type', 'google_rating', 'google_reviews',
-                'google_price', 'google_url', 'match_score', 'matched_field',
-                'timestamp'
-            ])
+        """Create CSV with headers only if the file doesn't already exist."""
+        if not os.path.exists(self.csv_path):
+            with open(self.csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    'account_id', 'account_name', 'status', 'message',
+                    'google_place_id', 'google_title', 'google_address',
+                    'google_type', 'google_rating', 'google_reviews',
+                    'google_price', 'google_url', 'match_score', 'matched_field',
+                    'timestamp'
+                ])
 
     def _write_csv_row(self, row: list):
         """Thread-safe CSV write."""

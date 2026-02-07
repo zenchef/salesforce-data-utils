@@ -56,6 +56,8 @@ class SerpApiClient:
             # Return the first result detailed info
             return self._process_result(local_results[0])
 
+        except RuntimeError:
+            raise  # Propagate API errors (throttle, etc.) so caller can handle retry logic
         except Exception as e:
             logger.error(f"Exception during SERP API call: {e}")
             return None
