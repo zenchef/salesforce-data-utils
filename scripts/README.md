@@ -7,10 +7,12 @@ This folder contains one-shot or job-like scripts that modify Salesforce data, p
 | Folder | Description | README |
 |--------|-------------|--------|
 | `serp-api/` | Enriches Salesforce Accounts with Google Maps data (rating, reviews, price, type, website) via SerpApi | [README](serp-api/README.md) |
+| `chargebee-quote-automation/` | Drives Firefox (Salesforce Classic) to generate Chargebee quote PDFs and sync quotes to opportunities for a CSV of quote IDs | [README](chargebee-quote-automation/README.md) |
 
 ## Conventions
 
-- **File naming**: `job-descriptive-name.(py|sh|js)` or `YYYYMMDD_job-descriptive-name.(py|sh|js)` for dated scripts.
+- **Folder per tool**: each multi-file tool lives in its own kebab-case folder with a `main.py` entry point and a per-tool `README.md`.
+- **File naming**: `job-descriptive-name.(py|sh|js)` or `YYYYMMDD_job-descriptive-name.(py|sh|js)` for dated standalone scripts.
 - Keep scripts idempotent where possible and document side effects in a per-script README.
 - **Credentials**: store secrets in the root `.env` file (gitignored); never commit keys.
 - **Logging**: write logs to stdout; exit non-zero on failure so CI/job schedulers detect errors.

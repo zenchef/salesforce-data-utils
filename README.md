@@ -11,8 +11,11 @@ salesforce-data-utils/
 ├── requirements.txt      # Python dependencies
 ├── data/                 # Output data (CSVs, gitignored)
 └── scripts/              # All scripts and tools
-    └── serp-api/         # Google Maps enrichment for SF Accounts
+    ├── serp-api/                    # Google Maps enrichment for SF Accounts
+    └── chargebee-quote-automation/  # Selenium UI automation for Chargebee quotes
 ```
+
+See [scripts/README.md](scripts/README.md) for the full, up-to-date list of scripts.
 
 ## Development Setup
 
