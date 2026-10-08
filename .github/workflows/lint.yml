@@ -8,7 +8,7 @@ on:
 
 jobs:
   pre-commit:
-    runs-on: [self-hosted, linux, aws, arm64, large]
+    runs-on: [self-hosted, linux, aws, arm64, tooling, large]
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
